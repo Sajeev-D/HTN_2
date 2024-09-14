@@ -1,20 +1,19 @@
 import yt_dlp
 import os
-from WorkingVid2TextConverter import analyze_video
 import time
+from ChromaDb import analyze_video, start_conversation
+import chromadb
 
-# Global variable for the download directory
+# Global variables
 DOWNLOAD_DIR = os.path.join(os.getcwd(), "youtube_downloads")
-
-# Global variable for the downloaded file path (will be set in download_youtube_video function)
 DOWNLOADED_FILE_PATH = None
 
 def download_youtube_video(url):
     global DOWNLOADED_FILE_PATH
     
     ydl_opts = {
-        'format': 'bestvideo+bestaudio/best',  # This will download the best quality video with audio
-        'merge_output_format': 'mp4',  # Merge video and audio into mp4 format
+        'format': 'bestvideo+bestaudio/best',
+        'merge_output_format': 'mp4',
         'outtmpl': os.path.join(DOWNLOAD_DIR, '%(title)s.%(ext)s'),
     }
 
@@ -23,7 +22,6 @@ def download_youtube_video(url):
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
             
-            # Ensure the filename has .mp4 extension
             if not filename.endswith('.mp4'):
                 filename = os.path.splitext(filename)[0] + '.mp4'
             
@@ -46,7 +44,12 @@ def download_youtube_video(url):
     except Exception as e:
         raise ValueError(f"An unexpected error occurred: {str(e)}")
 
-def test_youtube_download(youtube_url):
+def process_youtube_video(youtube_url):
+    # Set up ChromaDB
+    chroma_client = chromadb.PersistentClient(path="./chroma_db")
+    collection_name = "video_analysis"
+    collection = chroma_client.get_or_create_collection(name=collection_name)
+
     # Create the download directory if it doesn't exist
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
@@ -59,41 +62,36 @@ def test_youtube_download(youtube_url):
         print(f"Video successfully downloaded to: {DOWNLOADED_FILE_PATH}")
         print(f"File size: {file_size:.2f} MB")
         
+        # Analyze the video
+        start_time = time.time()
+        video_id, groq_analysis = analyze_video(DOWNLOADED_FILE_PATH, collection)
+        end_time = time.time()
+        
+        if groq_analysis is None:
+            print("Failed to generate Groq analysis. Exiting.")
+            return
+        
+        print(f"\nAnalysis Result:")
+        print(groq_analysis)
+        print(f"\nTotal execution time: {end_time - start_time:.2f} seconds")
+
+        # Ask user if they want to start a conversation
+        start_chat = input("Do you want to start a conversation about the video? (yes/no): ")
+        if start_chat.lower() == 'yes':
+            start_time = time.time()
+            start_conversation(video_id, groq_analysis, collection)
+            end_time = time.time()
+            print(f"Conversation time: {end_time - start_time:.2f} seconds")
+        else:
+            print("Conversation not started. Exiting program.")
+        
     except ValueError as e:
         print(f"Error: {str(e)}")
     except Exception as e:
         print(f"An unexpected error occurred: {str(e)}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
-    startClock = time.time() # Start timing
-    test_youtube_download("https://youtu.be/xjQzg1QAlXs?si=M5Xd7rWn08gl4URK")
-    video_path = DOWNLOADED_FILE_PATH
-    output_path = r"C:\Users\izcin\OneDrive\Documents\HTN\Video-Audio-To-Text-Generator\backend\videoanalysis.txt"
-    analyze_video(video_path, output_path)
-    endClock = time.time()  # End timing
-    execution_time = endClock - startClock
-    print(f"Total execution time: {execution_time:.2f} seconds")
-
-
-# # Example of how you might use the variables after running the script
-# print(f"\nDownload Directory: {DOWNLOAD_DIR}")
-# print(f"Full path of downloaded file: {DOWNLOADED_FILE_PATH}")
-
-# if DOWNLOADED_FILE_PATH and os.path.exists(DOWNLOADED_FILE_PATH):
-#     print(f"File successfully saved at: {DOWNLOADED_FILE_PATH}")
-# else:
-#     print("File was not downloaded or cannot be found.")
-
-# print("\nList of files in the download directory:")
-# for file in os.listdir(DOWNLOAD_DIR):
-#     print(f"- {file}")
-    
-    # # Test with an invalid URL
-    # test_youtube_download("https://www.youtube.com/watch?v=invalid")
-    
-    # # Test with a non-YouTube URL
-    # test_youtube_download("https://www.example.com")
-    
-    # # Test with a private or unavailable video
-    # # (You may need to replace this with an actual unavailable video URL)
-    # test_youtube_download("https://www.youtube.com/watch?v=xxxxxxxxxxx")
+    youtube_url = input("Enter the YouTube URL: ")
+    process_youtube_video(youtube_url)
