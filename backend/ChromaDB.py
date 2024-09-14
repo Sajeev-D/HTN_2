@@ -279,7 +279,7 @@ def process_video_analysis(video_id, collection):
         return None
 
     # Flatten the list of documents if it's a nested list
-    documents = [item for sublist in results['documents'] for item in (sublist if isinstance(sublist, list) else [sublist])]
+    documents = [item for suanablist in results['documents'] for item in (sublist if isinstance(sublist, list) else [sublist])]
     
     # Filter out any non-string items
     documents = [doc for doc in documents if isinstance(doc, str)]
@@ -357,7 +357,7 @@ def start_conversation(video_id, groq_analysis, collection):
 def main():
     """Main function to test video analysis and start a conversation."""
     # Set up ChromaDB
-    chroma_client = chromadb.PersistentClient(path="./chroma_db")
+    chroma_client = chromadb.HttpClient()
     collection_name = "video_analysis"
 
     # Get or create the collection
