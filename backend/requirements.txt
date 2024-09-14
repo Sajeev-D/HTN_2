@@ -1,0 +1,21 @@
+# Web framework
+Flask
+flask-cors
+
+# Video processing
+google-cloud-videointelligence
+
+# YouTube video downloading
+yt-dlp
+
+# Claude API interaction
+anthropic
+
+# Utility libraries
+Werkzeug
+
+# WSGI server for production
+gunicorn
+
+# For handling environment variables (optional, but recommended)
+python-dotenv
