@@ -5,9 +5,15 @@ from werkzeug.utils import secure_filename
 import traceback
 import chromadb
 from ChromaDB import analyze_video, ConversationHandler
+from flask_pymongo import PyMongo
+from datetime import datetime
+from dotenv import load_dotenv
 
 app = Flask(__name__)
 CORS(app)
+
+app.config["MONGO_URI"] = os.getenv("MONGODB_URI")
+mongo = PyMongo(app)
 
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'mp4', 'avi', 'mov', 'webm'}
@@ -95,6 +101,61 @@ def conversation():
 @app.errorhandler(413)
 def request_entity_too_large(error):
     return jsonify({'error': 'File too large (max 100MB)'}), 413
+
+@app.route('/api/save-user', methods=['POST'])
+def save_user():
+    user_data = request.json
+
+    # Extract email and other details from the request
+    email = user_data.get('email')
+
+    if not email:
+        return jsonify({'error': 'Email is required'}), 400
+
+    # Check if the user already exists in the database
+    user = mongo.db.users.find_one({'email': email})
+
+    if not user:
+        print("User doesn't exist yet")
+        # If user doesn't exist, create a new user record
+        new_user = {
+            'email': email,
+            'footage': []
+        }
+        mongo.db.users.insert_one(new_user)
+        return jsonify({'message': 'User created'}), 201
+    else:
+        return jsonify({'message': 'User already exists'}), 200
+
+@app.route('/api/add-footage', methods=['POST'])
+def add_footage():
+    user_data = request.json
+    email = user_data.get('email')
+    footage_data = user_data.get('footage')
+
+    if not email or not footage_data:
+        return jsonify({'error': 'Email and footage data are required'}), 400
+
+    # Find the user by email
+    user = users_collection.find_one({'email': email})
+
+    if user:
+        # Append the new footage to the user's footage list
+        new_footage = {
+            'title': footage_data.get('title'),
+            'description': footage_data.get('description'),
+            'upload_date': datetime.utcnow(),
+            'analysis': footage_data.get('analysis')
+        }
+
+        users_collection.update_one(
+            {'email': email},
+            {'$push': {'footage': new_footage}}
+        )
+
+        return jsonify({'message': 'Footage uploaded'}), 200
+    else:
+        return jsonify({'error': 'User not found'}), 404
 
 if __name__ == '__main__':
     app.run(debug=True)
