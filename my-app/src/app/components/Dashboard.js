@@ -26,20 +26,40 @@ export default function Dashboard() {
     formData.append('name', name);
 
     try {
-      const response = await fetch('http://localhost:5000/analyze', {
+      // Upload and analyze the file
+      const analyzeResponse = await fetch('http://localhost:5000/analyze', {
         method: 'POST',
         body: formData,
       });
-      const data = await response.json();
-      setVideoId(data.video_id);
-      setAnalysis(data.result);
-      setLabel(data.label);
-      setName(data.name);
+      const analyzeData = await analyzeResponse.json();
+      setVideoId(analyzeData.video_id);
+      setAnalysis(analyzeData.result);
+      setLabel(analyzeData.label);
+      setName(analyzeData.name);
+
+      // Save user data
+      const saveUserResponse = await fetch('http://localhost:5000/api/save-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          email: user.email,
+          name: name,
+          label: label
+        }),
+      });
+
+      if (!saveUserResponse.ok) {
+        console.error('Failed to save user data');
+      }
+
     } catch (error) {
-      console.error('Error uploading file:', error);
+      console.error('Error during upload or saving user data:', error);
     }
   };
 
+  
   const handleChat = async () => {
     if (!videoId || !chatInput) return;
 
