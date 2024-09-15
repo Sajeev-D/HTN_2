@@ -87,7 +87,6 @@ Let's begin the conversation."""
         except Exception as e:
             print(f"Error in Groq API call: {str(e)}")
             return "I'm sorry, but I encountered an error while processing your request. Could you please try asking your question in a different way?"
-        
 
 def analyze_video(video_path, collection):
     """Analyze a local video file using Google Cloud Video Intelligence API and Groq, and store the results in ChromaDB."""
@@ -279,7 +278,7 @@ def process_video_analysis(video_id, collection):
         return None
 
     # Flatten the list of documents if it's a nested list
-    documents = [item for suanablist in results['documents'] for item in (sublist if isinstance(sublist, list) else [sublist])]
+    documents = [item for sublist in results['documents'] for item in (sublist if isinstance(sublist, list) else [sublist])]
     
     # Filter out any non-string items
     documents = [doc for doc in documents if isinstance(doc, str)]
@@ -357,7 +356,7 @@ def start_conversation(video_id, groq_analysis, collection):
 def main():
     """Main function to test video analysis and start a conversation."""
     # Set up ChromaDB
-    chroma_client = chromadb.HttpClient()
+    chroma_client = chromadb.PersistentClient(path="./chroma_db")
     collection_name = "video_analysis"
 
     # Get or create the collection

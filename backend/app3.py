@@ -3,8 +3,8 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import traceback
-from ChromaDB import VideoAnalyzer
-
+import chromadb
+from ChromaDB import analyze_video, ConversationHandler
 
 app = Flask(__name__)
 CORS(app)
@@ -16,7 +16,12 @@ app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100 MB limit
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-video_analyzer = VideoAnalyzer()
+# Initialize ChromaDB client and collection
+chroma_client = chromadb.PersistentClient(path="./chroma_db")
+collection = chroma_client.get_or_create_collection(name="video_analysis")
+
+# Create a ConversationHandler instance
+conversation_handler = ConversationHandler(collection)
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -37,9 +42,12 @@ def analyze():
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(filepath)
             
-            video_id, analysis_result = video_analyzer.analyze_video(filepath)
+            video_id, analysis_result = analyze_video(filepath, collection)
             
             os.remove(filepath)
+            
+            # Start a new conversation for this video
+            conversation_handler.start_conversation(video_id, analysis_result)
             
             return jsonify({'video_id': video_id, 'result': analysis_result}), 200
         except Exception as e:
@@ -61,7 +69,23 @@ def conversation():
     user_input = data['user_input']
 
     try:
-        response = video_analyzer.get_conversation_response(video_id, user_input)
+        # Ensure the conversation is started for this video_id
+        if video_id not in conversation_handler.conversation_history:
+            # Retrieve the analysis from ChromaDB
+            results = collection.query(
+                query_texts=[f"Video analysis for {video_id}"],
+                n_results=1
+            )
+            if results['documents'] and isinstance(results['documents'][0], list):
+                analysis = results['documents'][0][0]
+            elif results['documents']:
+                analysis = results['documents'][0]
+            else:
+                return jsonify({'error': 'Video analysis not found'}), 404
+            
+            conversation_handler.start_conversation(video_id, analysis)
+
+        response = conversation_handler.get_response(user_input)
         return jsonify({'response': response}), 200
     except Exception as e:
         app.logger.error(f"Error during conversation: {str(e)}")
