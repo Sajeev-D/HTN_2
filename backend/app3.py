@@ -40,6 +40,8 @@ def analyze():
         return jsonify({'error': 'No file part'}), 400
     
     file = request.files['file']
+    label = request.form.get('label', '')
+    name = request.form.get('name', '')
     
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
@@ -50,14 +52,19 @@ def analyze():
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(filepath)
             
-            video_id, analysis_result = analyze_video(filepath, collection)
+            video_id, analysis_result = analyze_video(filepath, collection, label=label, name=name)
             
             os.remove(filepath)
             
             # Start a new conversation for this video
             conversation_handler.start_conversation(video_id, analysis_result)
             
-            return jsonify({'video_id': video_id, 'result': analysis_result}), 200
+            return jsonify({
+                'video_id': video_id, 
+                'result': analysis_result,
+                'label': label,
+                'name': name
+            }), 200
         except Exception as e:
             app.logger.error(f"Error during video analysis: {str(e)}")
             app.logger.error(traceback.format_exc())
@@ -66,6 +73,8 @@ def analyze():
             return jsonify({'error': str(e)}), 500
     else:
         return jsonify({'error': 'File type not allowed'}), 400
+    
+# Return the label and name of the video
 
 @app.route('/conversation', methods=['POST'])
 def conversation():
@@ -158,6 +167,26 @@ def add_footage():
         return jsonify({'message': 'Footage uploaded'}), 200
     else:
         return jsonify({'error': 'User not found'}), 404
+
+@app.route('/footages', methods=['GET'])
+def get_footages():
+    # Get the email parameter from the query string
+    email = request.args.get('email')
+
+    if not email:
+        return jsonify({"error": "Email is required"}), 400
+
+    try:
+        # Find the user by email
+        user = mongo.db.users.find_one({"email": email})
+
+        if user and 'footages' in user:
+            return jsonify({"footages": user['footages']}), 200
+        else:
+            return jsonify({"footages": []}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
