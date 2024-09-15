@@ -19,3 +19,7 @@ gunicorn
 
 # For handling environment variables (optional, but recommended)
 python-dotenv
+dotenv
+
+# MongoDB
+flask_pymongo
