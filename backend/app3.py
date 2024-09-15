@@ -9,6 +9,8 @@ from flask_pymongo import PyMongo
 from datetime import datetime
 from dotenv import load_dotenv
 
+load_dotenv()
+
 app = Flask(__name__)
 CORS(app)
 
