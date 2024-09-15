@@ -119,5 +119,25 @@ def add_footage():
     else:
         return jsonify({'error': 'User not found'}), 404
 
+@app.route('/footages', methods=['GET'])
+def get_footages():
+    # Get the email parameter from the query string
+    email = request.args.get('email')
+    
+    if not email:
+        return jsonify({"error": "Email is required"}), 400
+    
+    try:
+        # Find the user by email
+        user = mongo.db.users.find_one({"email": email})
+        
+        if user and 'footages' in user:
+            return jsonify({"footages": user['footages']}), 200
+        else:
+            return jsonify({"footages": []}), 200
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     app.run(debug=True)
