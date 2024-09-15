@@ -3,104 +3,72 @@
 import { useUser } from '@auth0/nextjs-auth0/client';
 import { useEffect } from 'react';
 import Dashboard from './components/Dashboard';
+import Image from 'next/image';
+import SurveillancePage from './components/Dashboard';
 
 export default function Index() {
   const { user, error, isLoading } = useUser();
 
-  const styles = {
-    container: {
-      minHeight: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'linear-gradient(to right, #4a00e0, #8e2de2)',
-      color: 'white',
-      fontFamily: 'Arial, sans-serif',
-    },
-    title: {
-      fontSize: '2.5rem',
-      fontWeight: 'bold',
-      marginBottom: '1rem',
-      textAlign: 'center',
-    },
-    description: {
-      fontSize: '1.2rem',
-      marginBottom: '2rem',
-      textAlign: 'center',
-      maxWidth: '400px',
-    },
-    button: {
-      backgroundColor: 'white',
-      color: '#6a11cb',
-      padding: '0.75rem 2rem',
-      borderRadius: '9999px',
-      fontWeight: 'bold',
-      textDecoration: 'none',
-      transition: 'all 0.3s ease',
-      boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-    },
-    buttonHover: {
-      backgroundColor: 'rgba(255, 255, 255, 0.9)',
-      transform: 'scale(1.05)',
-    },
-  };
-
-  if (isLoading) return (
-    <div style={styles.container}>
-      <div style={styles.title}>Loading...</div>
-    </div>
-  );
-
-  if (error) return (
-    <div style={styles.container}>
-      <div style={styles.description}>{error.message}</div>
-    </div>
-  );
-
-  if (user) {
-    useEffect(() => {
-      if (user) {
-        console.log(user.email);
-        // Send the user data to the backend
-        fetch('http://localhost:5000/api/save-user', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ email: user.email }),
-        })
+  useEffect(() => {
+    if (user) {
+      console.log(user.email);
+      // Send the user data to the backend
+      fetch('http://localhost:5000/api/save-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: user.email }),
+      })
         .then((response) => response.json())
         .then((data) => console.log('User saved:', data))
         .catch((error) => console.error('Error saving user:', error));
-      }
-    }, [user]);
+    }
+  }, [user]);
 
+  if (isLoading) return <div className="flex justify-center items-center h-screen text-2xl font-bold">Loading...</div>;
+
+  if (error) return <div className="flex justify-center items-center h-screen text-xl text-red-600">{error.message}</div>;
+
+  if (user) {
     return (
-      <div>
-        <Dashboard />
+      <div className="w-full h-screen">
+        <SurveillancePage />
       </div>
     );
   }
 
   return (
-    <div style={styles.container}>
-      <h1 style={styles.title}>Welcome to Our App</h1>
-      <p style={styles.description}>Securely log in to access your personalized dashboard and start your journey.</p>
-      <a 
-        href="/api/auth/login"
-        style={styles.button}
-        onMouseEnter={(e) => {
-          e.target.style.backgroundColor = styles.buttonHover.backgroundColor;
-          e.target.style.transform = styles.buttonHover.transform;
-        }}
-        onMouseLeave={(e) => {
-          e.target.style.backgroundColor = styles.button.backgroundColor;
-          e.target.style.transform = 'scale(1)';
-        }}
-      >
-        Login
-      </a>
+    <div className="min-h-screen w-full bg-gradient-to-br from-white via-beige to-gray-200 text-black font-[family-name:var(--font-geist-sans)] relative overflow-hidden">
+      {/* Content */}
+      <main className="relative z-10 min-h-screen flex items-center justify-center p-8">
+        <div className="max-w-6xl w-full flex flex-col md:flex-row items-center justify-between">
+          <div className="w-full md:w-1/2 mb-8 md:mb-0">
+            <Image
+              src="/Surv.png"
+              alt="Website Icon"
+              width={400}
+              height={400}
+              className="mx-auto md:mx-0"
+            />
+          </div>
+          <div className="w-full md:w-1/2 md:pl-8 text-center md:text-left">
+            <h1 className="text-4xl md:text-5xl font-bold mb-4 text-black">Survo</h1>
+            <p className="text-xl text-gray-700 mb-8">The first video LLM made to augment security surveillance</p>
+            <div className="space-y-4 md:space-y-0 md:space-x-4 flex flex-col md:flex-row items-center justify-center md:justify-start">
+              <a href="/api/auth/login" className="w-full md:w-auto bg-blue-500 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-full transition duration-300 transform hover:scale-105">
+                Login
+              </a>
+              <button
+                className="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-full transition duration-300 transform hover:scale-105"
+                onClick={() => router.push('/surveillance')}
+              >
+                View Surveillance
+              </button>
+            </div>
+          </div>
+        </div>
+      </main>
     </div>
   );
 }
