@@ -4,6 +4,8 @@ from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import traceback
 import chromadb
+import boto3
+from botocore.exceptions import ClientError
 from ChromaDB import analyze_video, ConversationHandler
 from flask_pymongo import PyMongo
 from datetime import datetime
@@ -14,8 +16,14 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
-app.config["MONGO_URI"] = os.getenv("MONGODB_URI")
-mongo = PyMongo(app)
+session = boto3.Session(
+    aws_access_key_id='AKIA2RP6IM4AKQECXWEH',
+    aws_secret_access_key='fMlh58nedpQvELEGV6kYzzKc/MHZNw03pNgRdAFZ',
+    region_name='us-east-2'  # e.g., 'us-west-2'
+)
+
+dynamodb = session.resource('dynamodb', region_name='us-east-2')  # e.g., 'us-east-1'
+table = dynamodb.Table('footagedb')  # Replace 'Users' with your table name
 
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'mp4', 'avi', 'mov', 'webm'}
@@ -33,6 +41,19 @@ conversation_handler = ConversationHandler(collection)
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def user_exists(email):
+    try:
+        response = table.get_item(
+            Key={
+                'email': email
+            }
+        )
+    except ClientError as e:
+        print(e.response['Error']['Message'])
+        return False
+    else:
+        return 'Item' in response
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
@@ -123,18 +144,23 @@ def save_user():
     if not email:
         return jsonify({'error': 'Email is required'}), 400
 
-    # Check if the user already exists in the database
-    user = mongo.db.users.find_one({'email': email})
+    print("before")
+    # Check if the user already exists in DynamoDB
+    exists = user_exists(email)
 
-    if not user:
+    print("after")
+    if not exists:
         print("User doesn't exist yet")
         # If user doesn't exist, create a new user record
         new_user = {
             'email': email,
             'footage': []
         }
-        mongo.db.users.insert_one(new_user)
-        return jsonify({'message': 'User created'}), 201
+        try:
+            table.put_item(Item=new_user)
+            return jsonify({'message': 'User created'}), 201
+        except Exception as e:
+            return jsonify({'error': f"Error creating user: {str(e)}"}), 500
     else:
         return jsonify({'message': 'User already exists'}), 200
 
@@ -142,31 +168,52 @@ def save_user():
 def add_footage():
     user_data = request.json
     email = user_data.get('email')
-    footage_data = user_data.get('footage')
+    label = user_data.get('label')
+    name = user_data.get('name')
+    video_id = user_data.get('video_id')
+    analysis = user_data.get('analysis')
 
-    if not email or not footage_data:
+    if not email or not label:
         return jsonify({'error': 'Email and footage data are required'}), 400
 
     # Find the user by email
-    user = users_collection.find_one({'email': email})
+    exists = user_exists(email)
 
-    if user:
+    if exists:
         # Append the new footage to the user's footage list
         new_footage = {
-            'title': footage_data.get('title'),
-            'description': footage_data.get('description'),
-            'upload_date': datetime.utcnow(),
-            'analysis': footage_data.get('analysis')
+            'label': label,
+            'name': name,
+            'upload_date': datetime.utcnow().isoformat(),
+            'analysis': analysis
         }
 
-        users_collection.update_one(
-            {'email': email},
-            {'$push': {'footage': new_footage}}
-        )
-
-        return jsonify({'message': 'Footage uploaded'}), 200
+        try:
+            # Update the user's record by appending the new footage to the existing list
+            response = table.update_item(
+                Key={'email': email},
+                UpdateExpression="SET #footage = list_append(if_not_exists(#footage, :empty_list), :new_footage)",
+                ExpressionAttributeNames={'#footage': 'footage'},
+                ExpressionAttributeValues={
+                    ':new_footage': [new_footage],
+                    ':empty_list': []
+                },
+                ReturnValues="UPDATED_NEW"
+            )
+            return jsonify({'message': 'Footage added successfully'}), 200
+        except ClientError as e:
+            print(e.response['Error']['Message'])
+            return jsonify({'error': 'Failed to add footage'}), 500
     else:
         return jsonify({'error': 'User not found'}), 404
+
+def get_user(email):
+    try:
+        response = table.get_item(Key={'email': email})
+        return response.get('Item')
+    except ClientError as e:
+        print(e.response['Error']['Message'])
+        return None
 
 @app.route('/footages', methods=['GET'])
 def get_footages():
@@ -178,10 +225,10 @@ def get_footages():
 
     try:
         # Find the user by email
-        user = mongo.db.users.find_one({"email": email})
+        user = get_user(email)
 
-        if user and 'footages' in user:
-            return jsonify({"footages": user['footages']}), 200
+        if user and 'footage' in user:
+            return jsonify({"footages": user['footage']}), 200
         else:
             return jsonify({"footages": []}), 200
 
