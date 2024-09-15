@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useUser } from '@auth0/nextjs-auth0/client';
 import { useRouter } from 'next/navigation';
 import { Camera } from 'lucide-react';
 
@@ -103,6 +104,11 @@ const Dashboard = () => {
   const [analysis, setAnalysis] = useState('');
   const [chatInput, setChatInput] = useState('');
   const [chatHistory, setChatHistory] = useState([]);
+  const { user, error, isLoading } = useUser();
+  const [label, setLabel] = useState('');
+  const [name, setName] = useState('');
+
+  console.log(user.email);
 
   const handleFileChange = (event) => {
     setFile(event.target.files[0]);
@@ -113,20 +119,44 @@ const Dashboard = () => {
 
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('label', label);
+    formData.append('name', name);
 
     try {
-      const response = await fetch('http://localhost:5000/analyze', {
+      // Upload and analyze the file
+      const analyzeResponse = await fetch('http://localhost:5000/analyze', {
         method: 'POST',
         body: formData,
       });
-      const data = await response.json();
-      setVideoId(data.video_id);
-      setAnalysis(data.result);
+      const analyzeData = await analyzeResponse.json();
+      setVideoId(analyzeData.video_id);
+      setAnalysis(analyzeData.result);
+      setLabel(analyzeData.label);
+      setName(analyzeData.name);
+
+      // Save user data
+      const saveUserResponse = await fetch('http://localhost:5000/api/save-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          email: user.email,
+          name: name,
+          label: label
+        }),
+      });
+
+      if (!saveUserResponse.ok) {
+        console.error('Failed to save user data');
+      }
+
     } catch (error) {
-      console.error('Error uploading file:', error);
+      console.error('Error during upload or saving user data:', error);
     }
   };
 
+  
   const handleChat = async () => {
     if (!videoId || !chatInput) return;
 
@@ -149,6 +179,20 @@ const Dashboard = () => {
   return (
     <div className="space-y-6">
       <div className="mb-4">
+        <input
+          type="text"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="Enter label"
+          className="w-full p-2 border rounded mb-2"
+        />
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Enter name"
+          className="w-full p-2 border rounded mb-2"
+        />
         <input type="file" onChange={handleFileChange} accept="video/*" className="mb-2" />
         <button onClick={handleUpload} className="bg-blue-500 text-white px-4 py-2 rounded">
           Upload and Analyze
@@ -159,6 +203,8 @@ const Dashboard = () => {
         <div className="mb-4">
           <h2 className="text-xl font-semibold mb-2">Analysis Result:</h2>
           <p>{analysis}</p>
+          <p><strong>Label:</strong> {label}</p>
+          <p><strong>Name:</strong> {name}</p>
         </div>
       )}
       <div className="mb-4">
