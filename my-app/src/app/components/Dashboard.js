@@ -1,27 +1,18 @@
-'use client';
-
-import { useState } from 'react';
+import React, { useState } from 'react';
 
 export default function Dashboard() {
   const [file, setFile] = useState(null);
+  const [videoId, setVideoId] = useState(null);
   const [analysis, setAnalysis] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [chatInput, setChatInput] = useState('');
+  const [chatHistory, setChatHistory] = useState([]);
 
   const handleFileChange = (event) => {
     setFile(event.target.files[0]);
   };
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    if (!file) {
-      setError('Please select a file');
-      return;
-    }
-
-    setIsLoading(true);
-    setError('');
-    setAnalysis('');
+  const handleUpload = async () => {
+    if (!file) return;
 
     const formData = new FormData();
     formData.append('file', file);
@@ -31,62 +22,69 @@ export default function Dashboard() {
         method: 'POST',
         body: formData,
       });
-
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Analysis failed');
-      }
-
+      setVideoId(data.video_id);
       setAnalysis(data.result);
     } catch (error) {
-      console.error('Error:', error);
-      setError(`An error occurred during analysis: ${error.message}`);
-    } finally {
-      setIsLoading(false);
+      console.error('Error uploading file:', error);
+    }
+  };
+
+  const handleChat = async () => {
+    if (!videoId || !chatInput) return;
+
+    try {
+      const response = await fetch('http://localhost:5000/conversation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ video_id: videoId, user_input: chatInput }),
+      });
+      const data = await response.json();
+      setChatHistory([...chatHistory, { user: chatInput, assistant: data.response }]);
+      setChatInput('');
+    } catch (error) {
+      console.error('Error chatting:', error);
     }
   };
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Video Analysis</h1>
-      <form onSubmit={handleSubmit} className="mb-4">
-        <input
-          type="file"
-          accept="video/*"
-          onChange={handleFileChange}
-          className="mb-2 block"
-        />
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="bg-blue-500 text-white px-4 py-2 rounded disabled:bg-gray-400"
-        >
-          {isLoading ? 'Analyzing...' : 'Analyze Video'}
+    <div>
+      <div className="mb-4">
+        <input type="file" onChange={handleFileChange} accept="video/*" className="mb-2" />
+        <button onClick={handleUpload} className="bg-blue-500 text-white px-4 py-2 rounded">
+          Upload and Analyze
         </button>
-      </form>
-      {error && <p className="text-red-500 mb-4">{error}</p>}
+      </div>
+
       {analysis && (
-        <div>
+        <div className="mb-4">
           <h2 className="text-xl font-semibold mb-2">Analysis Result:</h2>
-          <pre className="bg-gray-100 p-4 rounded whitespace-pre-wrap">
-            {analysis}
-          </pre>
+          <p>{analysis}</p>
         </div>
       )}
+      <div className="mb-4">
+        <input
+          type="text"
+          value={chatInput}
+          onChange={(e) => setChatInput(e.target.value)}
+          placeholder="Ask a question about the video"
+          className="w-full p-2 border rounded"
+        />
+        <button onClick={handleChat} className="bg-purple-500 text-white px-4 py-2 rounded mt-2">
+          Ask
+        </button>
+      </div>
+      <div>
+        <h2 className="text-xl font-semibold mb-2">Chat History:</h2>
+        {chatHistory.map((chat, index) => (
+          <div key={index} className="mb-2">
+            <p><strong>You:</strong> {chat.user}</p>
+            <p><strong>Assistant:</strong> {chat.assistant}</p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
-
-
-/*
-Web upload section:
-
-npm install @masvio/uploader
-js-uploader
-need to take html input the add files to the uploader
-Can set up the cloud storage
-In the new portal setting, 
-the lightning challenge
-
-*/
