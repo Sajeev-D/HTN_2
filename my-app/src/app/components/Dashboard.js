@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useUser } from '@auth0/nextjs-auth0/client';
 import { useRouter } from 'next/navigation';
 import { Camera } from 'lucide-react';
+import chatStore from '../chatStore';
 
-const ChatItem = ({ id, title, date, content }) => {
+const ChatItem = ({ id, name, label, upload_date, analysis }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const previewLength = 100;
   const router = useRouter();
@@ -15,15 +16,24 @@ const ChatItem = ({ id, title, date, content }) => {
     setIsExpanded(!isExpanded);
   };
 
+  const handleChatClick = () => {
+    chatStore.setCurrentChatId(id);
+    router.push('/chatpage');
+  };
+
+  // Format the date
+  const formattedDate = new Date(upload_date).toLocaleString();
+
   return (
     <div className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-200 flex">
       <div className="p-4 bg-gray-50 w-1/3 flex flex-col justify-between">
         <div>
           <div className="flex justify-between items-center mb-2">
-            <h3 className="font-semibold text-blue-600 text-lg">{title}</h3>
+            <h3 className="font-semibold text-blue-600 text-lg">{name || 'Untitled'}</h3>
             <Camera size={20} className="text-blue-500" />
           </div>
-          <p className="text-sm text-gray-600">{date}</p>
+          <p className="text-sm text-gray-600">{formattedDate}</p>
+          <p className="text-sm text-gray-600 mt-1">Label: {label || 'Unlabeled'}</p>
         </div>
         <div className="flex space-x-2">
           <button
@@ -34,7 +44,7 @@ const ChatItem = ({ id, title, date, content }) => {
           </button>
           <button
             className="mt-4 bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-full text-sm transition duration-300 ease-in-out transform hover:scale-105"
-            onClick={() => router.push(`/chatpage`)}
+            onClick={handleChatClick}
           >
             Chat
           </button>
@@ -42,7 +52,7 @@ const ChatItem = ({ id, title, date, content }) => {
       </div>
       <div className="p-4 w-2/3 border-l border-gray-200">
         <div className="text-gray-700 mb-2 font-light">
-          {isExpanded ? content : `${content.slice(0, previewLength)}...`}
+          {isExpanded ? analysis : `${analysis.slice(0, previewLength)}...`}
         </div>
         <button
           className="text-blue-500 hover:text-blue-600 flex items-center text-sm font-light"
@@ -56,44 +66,73 @@ const ChatItem = ({ id, title, date, content }) => {
 };
 
 const ClientChatList = () => {
-  const hardCodedChats = [
-    {
-      id: 1,
-      title: "Front Entrance - Morning",
-      date: "2023-09-15 08:00 AM",
-      content: "Surveillance footage of the front entrance during morning hours. Several employees entered the building between 8:00 AM and 9:00 AM. No suspicious activities observed."
-    },
-    {
-      id: 2,
-      title: "Parking Lot - Afternoon",
-      date: "2023-09-15 02:30 PM",
-      content: "Footage of the main parking lot during afternoon hours. Regular vehicle traffic observed. A delivery truck arrived at 2:45 PM and left at 3:00 PM after unloading packages."
-    },
-    {
-      id: 3,
-      title: "Back Alley - Night",
-      date: "2023-09-15 11:45 PM",
-      content: "Night vision footage of the back alley. A stray cat was observed at 11:52 PM. No human activity detected during this period."
-    },
-    {
-      id: 4,
-      title: "Server Room - Maintenance",
-      date: "2023-09-16 03:15 AM",
-      content: "Footage of scheduled maintenance in the server room. Two IT personnel entered at 3:15 AM and left at 4:30 AM. All activities appeared routine and authorized."
-    },
-    {
-      id: 5,
-      title: "Main Lobby - Lunch Hour",
-      date: "2023-09-16 12:00 PM",
-      content: "Surveillance of the main lobby during lunch hours. High foot traffic observed between 12:00 PM and 1:00 PM. No incidents reported."
-    }
-  ];
+  const [chats, setChats] = useState([]);
+  const [labelLog, setLabelLog] = useState({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const { user } = useUser();
+
+  useEffect(() => {
+    const fetchChats = async () => {
+      if (!user || !user.email) return;
+
+      setIsLoading(true);
+      try {
+        const response = await fetch('http://localhost:5000/footages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ email: user.email }),
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch footages');
+        }
+        
+        const data = await response.json();
+        console.log(data);
+        setChats(data.footages || []);
+        
+        // Create label log
+        const log = (data.footages || []).reduce((acc, footage) => {
+          if (footage.label) {
+            acc[footage.label] = (acc[footage.label] || 0) + 1;
+          }
+          return acc;
+        }, {});
+        setLabelLog(log);
+      } catch (err) {
+        console.error('Error fetching footages:', err);
+        setError(err.message);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchChats();
+  }, [user]);
+
+  if (isLoading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error}</div>;
 
   return (
-    <div className="space-y-6 overflow-y-auto max-h-[calc(100vh-8rem)]">
-      {hardCodedChats.map((chat) => (
-        <ChatItem key={chat.id} {...chat} />
-      ))}
+    <div>
+      <div className="mb-6">
+        <h3 className="text-xl font-semibold mb-2">Label Log</h3>
+        <ul className="bg-white rounded-lg shadow p-4">
+          {Object.entries(labelLog).map(([label, count]) => (
+            <li key={label} className="mb-2">
+              <span className="font-medium">{label}:</span> {count} occurrence{count !== 1 ? 's' : ''}
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div className="space-y-6 overflow-y-auto max-h-[calc(100vh-16rem)]">
+        {chats.map((chat) => (
+          <ChatItem key={chat.id} {...chat} />
+        ))}
+      </div>
     </div>
   );
 };
@@ -107,8 +146,6 @@ const Dashboard = () => {
   const { user, error, isLoading } = useUser();
   const [label, setLabel] = useState('');
   const [name, setName] = useState('');
-
-  console.log(user.email);
 
   const handleFileChange = (event) => {
     setFile(event.target.files[0]);
@@ -135,7 +172,7 @@ const Dashboard = () => {
       setName(analyzeData.name);
 
       // Save user data
-      const saveUserResponse = await fetch('http://localhost:5000/api/save-user', {
+      const saveUserResponse = await fetch('http://localhost:5000/api/add-footage', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -143,7 +180,8 @@ const Dashboard = () => {
         body: JSON.stringify({ 
           email: user.email,
           name: name,
-          label: label
+          label: label,
+          analysis: analyzeData.result
         }),
       });
 
@@ -156,7 +194,6 @@ const Dashboard = () => {
     }
   };
 
-  
   const handleChat = async () => {
     if (!videoId || !chatInput) return;
 
@@ -232,9 +269,7 @@ const Dashboard = () => {
   );
 };
 
-export default function SurveillancePage() {
-  const router = useRouter();
-
+const SurveillancePage = () => {
   return (
     <div className="min-h-screen bg-gray-100 text-black font-[family-name:var(--font-geist-sans)]">
       <main className="max-w-7xl mx-auto p-8">
@@ -254,4 +289,6 @@ export default function SurveillancePage() {
       </main>
     </div>
   );
-}
+};
+
+export default SurveillancePage;

@@ -73,7 +73,7 @@ def analyze():
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(filepath)
             
-            video_id, analysis_result = analyze_video(filepath, collection, label=label, name=name)
+            video_id, analysis_result = analyze_video(filepath, collection)
             
             os.remove(filepath)
             
@@ -170,7 +170,7 @@ def add_footage():
     email = user_data.get('email')
     label = user_data.get('label')
     name = user_data.get('name')
-    video_id = user_data.get('video_id')
+    # video_id = user_data.get('video_id')
     analysis = user_data.get('analysis')
 
     if not email or not label:
@@ -215,10 +215,10 @@ def get_user(email):
         print(e.response['Error']['Message'])
         return None
 
-@app.route('/footages', methods=['GET'])
+@app.route('/footages', methods=['POST'])
 def get_footages():
-    # Get the email parameter from the query string
-    email = request.args.get('email')
+    user_data = request.json
+    email = user_data.get('email')  # Use .get() method to safely access 'email'
 
     if not email:
         return jsonify({"error": "Email is required"}), 400

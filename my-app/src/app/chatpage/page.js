@@ -3,14 +3,23 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { fetchChatMessages, sendChatMessage } from '../api';
+import chatStore from '../chatStore';
 
-export default function ChatPage({ params }) {
+export default function ChatPage() {
   const router = useRouter();
-  const { id } = params;
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
+  const [chatId, setChatId] = useState(null);
 
   useEffect(() => {
+    const id = chatStore.getCurrentChatId();
+    console.log("id"+id)
+    // if (!id) {
+    //   router.push('/'); // Redirect to dashboard if no chat ID is set
+    //   return;
+    // }
+    setChatId(id);
+
     const loadChatMessages = async () => {
       try {
         const chatMessages = await fetchChatMessages(id);
@@ -22,7 +31,7 @@ export default function ChatPage({ params }) {
     };
 
     loadChatMessages();
-  }, [id]);
+  }, [router]);
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
@@ -32,7 +41,7 @@ export default function ChatPage({ params }) {
       setInput('');
 
       try {
-        const response = await sendChatMessage(id, input);
+        const response = await sendChatMessage(chatId, input);
         setMessages(prev => [...prev, { role: 'assistant', content: response.message }]);
       } catch (error) {
         console.error('Failed to send message:', error);
@@ -40,10 +49,11 @@ export default function ChatPage({ params }) {
       }
     }
   };
+
   return (
     <div className="flex flex-col h-screen bg-gray-100">
       <header className="bg-blue-600 text-white p-4 flex justify-between items-center">
-        <h1 className="text-xl font-bold">Chat about Surveillance ID: {id}</h1>
+        <h1 className="text-xl font-bold">Chat about Surveillance ID: {chatId}</h1>
         <button
           onClick={() => router.push('/')}
           className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
